@@ -1,8 +1,4 @@
-use mqtt;
-use mqtt::packet::*;
 use serde_json::{self, Result, Value};
-use mqtt::{Decodable, Encodable, QualityOfService};
-use mqtt::{TopicFilter, TopicName};
 use std::env;
 use std::io::{self, Write};
 use serde_derive::{Serialize, Deserialize};
@@ -110,7 +106,7 @@ pub enum UserEvent {
 pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
     let (tx, rx):(Sender<UserEvent>, Receiver<UserEvent>) = bounded(1000);
     let start = Instant::now();
-    let update200ms = tick(Duration::from_millis(200));
+    let update500ms = tick(Duration::from_millis(500));
     let update100ms = tick(Duration::from_millis(100));
     
     thread::spawn(move || {
@@ -127,7 +123,7 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
         let mut tx = msgtx.clone();
         loop {
             select! {
-                recv(update200ms) -> _ => {
+                recv(update500ms) -> _ => {
                     for u in &mut TotalUsers {
                         u.borrow_mut().login(&mut tx);
                     }
