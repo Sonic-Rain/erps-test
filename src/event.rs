@@ -40,37 +40,31 @@ pub struct LogoutMsg {
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CreateRoomRes {
-    pub id: String, 
-    pub room: String,
     pub msg: String,
 }
 #[derive(Clone, Debug)]
 pub struct CreateRoomMsg {
-    pub id: String, 
-    pub room: String,
+    pub id: String,
     pub msg: String,
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CloseRoomRes {
-    pub room: String,
     pub msg: String,
 }
 #[derive(Clone, Debug)]
 pub struct CloseRoomMsg {
-    pub id: String, 
     pub room: String,
     pub msg: String,
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct UserNGHeroRes {
+    pub id: String,
     pub hero: String,
-    pub msg: String,
 }
 #[derive(Clone, Debug)]
 pub struct UserNGHeroMsg {
     pub id: String,
     pub hero: String,
-    pub msg: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -125,7 +119,7 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
             select! {
                 recv(update500ms) -> _ => {
                     for u in &mut TotalUsers {
-                        u.borrow_mut().login(&mut tx);
+                        u.borrow_mut().next_action(&mut tx);
                     }
                 }
                 recv(rx) -> d => {
@@ -142,7 +136,7 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
                             UserEvent::Logout(x) => {
                                 for u in &mut TotalUsers {
                                     if u.borrow().id == x.id {
-                                        u.borrow_mut().isLogin = false;
+                                        u.borrow_mut().get_logout();
                                         break;
                                     }
                                 }
@@ -150,23 +144,22 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
                             UserEvent::Create(x) => {
                                 for u in &mut TotalUsers {
                                     if u.borrow().id == x.id {
-                                        u.borrow_mut().isInRoom = false;
+                                        u.borrow_mut().get_create();
                                         break;
                                     }
                                 }
                             },
                             UserEvent::Close(x) => {
                                 for u in &mut TotalUsers {
-                                    if u.borrow().id == x.id {
-                                        u.borrow_mut().isInRoom = false;
-                                        break;
+                                    if u.borrow().room == x.room {
+                                        u.borrow_mut().get_close();
                                     }
                                 }
                             },
                             UserEvent::ChooseNGHero(x) => {
                                 for u in &mut TotalUsers {
                                     if u.borrow().id == x.id {
-                                        u.borrow_mut().hero = x.hero;
+                                        u.borrow_mut().get_choose_hero(x.hero);
                                         break;
                                     }
                                 }
@@ -174,6 +167,7 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
                             UserEvent::Invite(x) => {
                                 for u in &mut TotalUsers {
                                     if u.borrow().id == x.id {
+                                        u.borrow_mut().get_invite();
                                         break;
                                     }
                                 }
@@ -181,7 +175,7 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
                             UserEvent::StartQueue(x) => {
                                 for u in &mut TotalUsers {
                                     if u.borrow().id == x.id {
-                                        u.borrow_mut().isStartQueue = true;
+                                        u.borrow_mut().get_start_queue();
                                         break;
                                     }
                                 }
@@ -215,8 +209,8 @@ pub fn logout(id: String, v: Value, sender: Sender<UserEvent>)
 pub fn create(id: String, v: Value, sender: Sender<UserEvent>)
  -> std::result::Result<(), std::io::Error>
 {
-    let data: LogoutRes = serde_json::from_value(v)?;
-    sender.send(UserEvent::Logout(LogoutMsg{id:id, msg:data.msg}));
+    let data: CreateRoomRes = serde_json::from_value(v)?;
+    sender.send(UserEvent::Create(CreateRoomMsg{id:id, msg:data.msg}));
     Ok(())
 }
 
@@ -232,7 +226,7 @@ pub fn choose_hero(id: String, v: Value, sender: Sender<UserEvent>)
  -> std::result::Result<(), std::io::Error>
 {
     let data: UserNGHeroRes = serde_json::from_value(v)?;
-    sender.send(UserEvent::ChooseNGHero(UserNGHeroMsg{id:id, hero: data.hero, msg:data.msg}));
+    sender.send(UserEvent::ChooseNGHero(UserNGHeroMsg{id:id, hero: data.hero}));
     Ok(())
 }
 

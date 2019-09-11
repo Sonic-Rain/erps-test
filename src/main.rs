@@ -8,9 +8,7 @@ use std::net::TcpStream;
 use std::str;
 use clap::{App, Arg};
 use uuid::Uuid;
-
 use rumqtt::{MqttClient, MqttOptions, QoS};
-
 
 use std::thread;
 use std::time::Duration;
@@ -84,6 +82,7 @@ fn main() -> std::result::Result<(), std::io::Error> {
     let (mut mqtt_client, notifications) = MqttClient::start(mqtt_options.clone()).unwrap();
     mqtt_client.subscribe("member/+/res/login", QoS::AtLeastOnce).unwrap();
     mqtt_client.subscribe("member/+/res/logout", QoS::AtLeastOnce).unwrap();
+    mqtt_client.subscribe("member/+/res/choose_hero", QoS::AtLeastOnce).unwrap();
 
     mqtt_client.subscribe("room/+/res/create", QoS::AtLeastOnce).unwrap();
     mqtt_client.subscribe("room/+/res/close", QoS::AtLeastOnce).unwrap();
@@ -139,7 +138,7 @@ fn main() -> std::result::Result<(), std::io::Error> {
             recv(notifications) -> notification => {
                 if let Ok(x) = notification {
                     if let Publish(x) = x {
-                        println!("{:?}", x);
+                        //println!("{:?}", x);
                         let payload = x.payload;
                         let msg = match str::from_utf8(&payload[..]) {
                             Ok(msg) => msg,
@@ -159,7 +158,7 @@ fn main() -> std::result::Result<(), std::io::Error> {
                                 event::login(userid, v, sender.clone())?;
                             }
                             else if relogout.is_match(topic_name) {
-                                let cap = relogin.captures(topic_name).unwrap();
+                                let cap = relogout.captures(topic_name).unwrap();
                                 let userid = cap[1].to_string();
                                 info!("logout: userid: {} json: {:?}", userid, v);
                                 event::logout(userid, v, sender.clone())?;
@@ -181,6 +180,12 @@ fn main() -> std::result::Result<(), std::io::Error> {
                                 let userid = cap[1].to_string();
                                 info!("start_queue: userid: {} json: {:?}", userid, v);
                                 event::start_queue(userid, v, sender.clone())?;
+                            }
+                            else if rechoosehero.is_match(topic_name) {
+                                let cap = rechoosehero.captures(topic_name).unwrap();
+                                let userid = cap[1].to_string();
+                                info!("choose hero: userid: {} json: {:?}", userid, v);
+                                event::choose_hero(userid, v, sender.clone())?;
                             }
                         } else {
                             warn!("Json Parser error");
