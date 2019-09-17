@@ -113,7 +113,12 @@ fn main() -> std::result::Result<(), std::io::Error> {
             select! {
                 recv(rx) -> d => {
                     if let Ok(d) = d {
-                        mqtt_client.publish(d.topic, QoS::AtLeastOnce, false, d.msg).unwrap();
+                        match mqtt_client.publish(d.topic, QoS::AtLeastOnce, false, d.msg) {
+                            Ok(_) => {},
+                            Err(x) => {
+                                println!("publish failed!!!!");
+                            }
+                        }
                     }
                 }
             }
@@ -186,6 +191,12 @@ fn main() -> std::result::Result<(), std::io::Error> {
                                 let userid = cap[1].to_string();
                                 info!("choose hero: userid: {} json: {:?}", userid, v);
                                 event::choose_hero(userid, v, sender.clone())?;
+                            }
+                            else if represtart.is_match(topic_name) {
+                                let cap = represtart.captures(topic_name).unwrap();
+                                let userid = cap[1].to_string();
+                                info!("prestart hero: userid: {} json: {:?}", userid, v);
+                                event::prestart(userid, v, sender.clone())?;
                             }
                         } else {
                             warn!("Json Parser error");

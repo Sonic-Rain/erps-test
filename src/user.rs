@@ -1,6 +1,7 @@
 use log::{info, warn, error, trace};
 use crate::msg::*;
 use crossbeam_channel::{bounded, tick, Sender, Receiver, select};
+use rand::Rng;
 
 #[derive(Debug, Default)]
 pub struct User {
@@ -9,8 +10,10 @@ pub struct User {
     pub room: String,
     pub isLogin: bool,
     pub isInRoom: bool,
+    pub isRoomCreater: bool,
     pub isChooseNGHero: bool,
     pub isStartQueue: bool,
+    pub isCanPreStart: bool,
     pub isPreStart: bool,
     pub isPlaying: bool,
 }
@@ -29,7 +32,7 @@ impl User {
         else if !self.isStartQueue {
             self.start_queue(tx);
         }
-        else if !self.isPreStart {
+        else if self.isCanPreStart {
             self.prestart(tx);
         }
     }
@@ -81,6 +84,7 @@ impl User {
     pub fn get_create(&mut self) {
         self.isInRoom = true;
         self.room = self.id.clone();
+        self.isRoomCreater = true;
     }
     pub fn close(&self, tx: &mut Sender<MqttMsg>) {
         if self.isInRoom {
@@ -95,7 +99,7 @@ impl User {
     }
     pub fn start_queue(&mut self, tx: &mut Sender<MqttMsg>) {
         if !self.isStartQueue {
-            let msg = format!(r#"{{"room":"{}", "action":"start queue"}}"#, self.room);
+            let msg = format!(r#"{{"id":"{}", "action":"start queue"}}"#, self.room);
             let topic = format!("room/{}/send/start_queue", self.id);
             tx.send(MqttMsg{topic:topic, msg:msg});
         }
@@ -104,10 +108,19 @@ impl User {
         self.isStartQueue = true;
     }
     pub fn prestart(&mut self, tx: &mut Sender<MqttMsg>) {
-        
+        if self.isCanPreStart && !self.isPreStart {
+            self.isPreStart = true;
+            let mut rng = rand::thread_rng();
+            let msg = format!(r#"{{"room":"{}", "id":"{}", "accept":true}}"#, self.room, self.id);
+            let topic = format!("room/{}/send/prestart", self.id);
+            tx.try_send(MqttMsg{topic:topic, msg:msg}).unwrap();
+        }
     }
-    pub fn get_prestart(&mut self) {
-        self.isPreStart = true;
+    pub fn get_prestart(&mut self, res: bool) {
+        self.isCanPreStart = res;
+        if res == false {
+            self.isPreStart = false;
+        }
     }
     pub fn invite(&mut self, tx: &mut Sender<MqttMsg>) {
         

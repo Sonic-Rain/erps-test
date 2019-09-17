@@ -87,6 +87,16 @@ pub struct StartQueueMsg {
     pub msg: String,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct PreStartRes {
+    pub msg: String,
+}
+#[derive(Clone, Debug)]
+pub struct PreStartMsg {
+    pub id: String,
+    pub msg: String,
+}
+
 pub enum UserEvent {
     Login(LoginMsg),
     Logout(LogoutMsg),
@@ -95,6 +105,7 @@ pub enum UserEvent {
     ChooseNGHero(UserNGHeroMsg),
     Invite(InviteMsg),
     StartQueue(StartQueueMsg),
+    PreStart(PreStartMsg),
 }
 
 pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
@@ -105,7 +116,7 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
     
     thread::spawn(move || {
         let mut TotalUsers: Vec<Rc<RefCell<User>>> = vec![];
-        for i in 0..10 {
+        for i in 0..4 {
             TotalUsers.push(Rc::new(RefCell::new(
                 User {
                     id: i.to_string(),
@@ -180,7 +191,25 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
                                     }
                                 }
                             },
-                            
+                            UserEvent::PreStart(x) => {
+                                if x.msg == "stop queue" {
+                                    for u in &mut TotalUsers {
+                                        if u.borrow().id == x.id {
+                                            u.borrow_mut().get_prestart(false);
+                                            break;
+                                        }
+                                    }
+                                }
+                                else {
+                                    for u in &mut TotalUsers {
+                                        if u.borrow().id == x.id {
+                                            u.borrow_mut().get_prestart(true);
+                                            break;
+                                        }
+                                    }
+                                }
+                                
+                            },
                         }
                     }
                 }
@@ -235,5 +264,13 @@ pub fn start_queue(id: String, v: Value, sender: Sender<UserEvent>)
 {
     let data: StartQueueRes = serde_json::from_value(v)?;
     sender.send(UserEvent::StartQueue(StartQueueMsg{id:id, msg:data.msg}));
+    Ok(())
+}
+
+pub fn prestart(id: String, v: Value, sender: Sender<UserEvent>)
+ -> std::result::Result<(), std::io::Error>
+{
+    let data: StartQueueRes = serde_json::from_value(v)?;
+    sender.send(UserEvent::PreStart(PreStartMsg{id:id, msg:data.msg}));
     Ok(())
 }

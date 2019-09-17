@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 crossbeam-channel = "0.3"
+rand = "*"
 mysql = "*"
 rumqtt = "*"
 clap = "2"
