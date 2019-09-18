@@ -2,6 +2,9 @@ use log::{info, warn, error, trace};
 use crate::msg::*;
 use crossbeam_channel::{bounded, tick, Sender, Receiver, select};
 use rand::Rng;
+use std::cell::RefCell;
+use std::rc::Rc;
+
 
 #[derive(Debug, Default)]
 pub struct User {
@@ -19,7 +22,7 @@ pub struct User {
 }
 
 impl User {
-    pub fn next_action(&mut self, tx: &mut Sender<MqttMsg>) {
+    pub fn next_action(&mut self, tx: &mut Sender<MqttMsg>, room: &String) {
         if !self.isLogin {
             self.login(tx);
         }
@@ -27,7 +30,12 @@ impl User {
             self.choose_hero(tx, "freyja".to_owned());
         }
         else if !self.isInRoom {
-            self.create(tx);
+            if room == "" {
+                self.create(tx);
+            }
+            else {
+                self.join(tx, room.to_string());
+            }
         }
         else if !self.isStartQueue {
             self.start_queue(tx);
@@ -36,6 +44,21 @@ impl User {
             self.prestart(tx);
         }
     }
+    pub fn back_action(&mut self, tx: &mut Sender<MqttMsg>) {
+        if self.isLogin {
+            self.logout(tx);
+        }
+        else if self.isInRoom && self.isRoomCreater {
+            self.close(tx);
+        }
+        else if !self.isStartQueue {
+            self.start_queue(tx);
+        }
+        else if self.isCanPreStart {
+            self.prestart(tx);
+        }
+    }
+
     pub fn login(&self, tx: &mut Sender<MqttMsg>) {
         if !self.isLogin {
             let msg = format!(r#"{{"id":"{}"}}"#, self.id);
@@ -43,6 +66,19 @@ impl User {
             tx.send(MqttMsg{topic:topic, msg:msg});
         }
     }
+
+    pub fn join(&self, tx: &mut Sender<MqttMsg>, room: String) {
+        if !self.isInRoom {
+            let msg = format!(r#"{{"room":"{}", "join":"{}"}}"#, room, self.id);
+            let topic = format!("room/{}/send/join", self.id);
+            tx.send(MqttMsg{topic:topic, msg:msg});
+        }
+    }
+    pub fn get_join(&mut self, room: String) {
+        self.isInRoom = true;
+        self.room = room;
+    }
+
     pub fn get_login(&mut self) {
         self.isLogin = true;
     }
@@ -74,11 +110,12 @@ impl User {
     }
     pub fn choose_random_hero(&mut self, tx: &mut Sender<MqttMsg>) {
     }
-    pub fn create(&self, tx: &mut Sender<MqttMsg>) {
+    pub fn create(&mut self, tx: &mut Sender<MqttMsg>) {
         if !self.isInRoom {
             let msg = format!(r#"{{"id":"{}"}}"#, self.id);
             let topic = format!("room/{}/send/create", self.id);
             tx.send(MqttMsg{topic:topic, msg:msg});
+            self.room = self.id.clone();
         }
     }
     pub fn get_create(&mut self) {
@@ -98,9 +135,12 @@ impl User {
         self.room = "".to_owned();
     }
     pub fn start_queue(&mut self, tx: &mut Sender<MqttMsg>) {
+        if self.isInRoom && !self.isRoomCreater {
+            self.isStartQueue = true;
+        }
         if !self.isStartQueue {
-            let msg = format!(r#"{{"id":"{}", "action":"start queue"}}"#, self.room);
-            let topic = format!("room/{}/send/start_queue", self.id);
+            let msg = format!(r#"{{"id":"{}", "action":"start queue"}}"#, self.id);
+            let topic = format!("room/{}/send/start_queue", self.room);
             tx.send(MqttMsg{topic:topic, msg:msg});
         }
     }

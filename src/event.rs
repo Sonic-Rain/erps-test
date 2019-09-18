@@ -97,6 +97,18 @@ pub struct PreStartMsg {
     pub msg: String,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct JoinRes {
+    pub room: String,
+    pub msg: String,
+}
+#[derive(Clone, Debug)]
+pub struct JoinMsg {
+    pub id: String,
+    pub room: String,
+    pub msg: String,
+}
+
 pub enum UserEvent {
     Login(LoginMsg),
     Logout(LogoutMsg),
@@ -106,6 +118,7 @@ pub enum UserEvent {
     Invite(InviteMsg),
     StartQueue(StartQueueMsg),
     PreStart(PreStartMsg),
+    Join(JoinMsg),
 }
 
 pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
@@ -129,13 +142,25 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
         loop {
             select! {
                 recv(update500ms) -> _ => {
+                    let mut room = "".to_owned();
                     for u in &mut TotalUsers {
-                        u.borrow_mut().next_action(&mut tx);
+                        u.borrow_mut().next_action(&mut tx, &room);
+                        if u.borrow().room != "" {
+                            room = u.borrow().room.clone();
+                        }
                     }
                 }
                 recv(rx) -> d => {
                     if let Ok(d) = d {
                         match d {
+                            UserEvent::Join(x) => {
+                                for u in &mut TotalUsers {
+                                    if u.borrow().id == x.id {
+                                        u.borrow_mut().get_join(x.room.clone());
+                                        break;
+                                    }
+                                }
+                            },
                             UserEvent::Login(x) => {
                                 for u in &mut TotalUsers {
                                     if u.borrow().id == x.id {
@@ -272,5 +297,13 @@ pub fn prestart(id: String, v: Value, sender: Sender<UserEvent>)
 {
     let data: StartQueueRes = serde_json::from_value(v)?;
     sender.send(UserEvent::PreStart(PreStartMsg{id:id, msg:data.msg}));
+    Ok(())
+}
+
+pub fn join(id: String, v: Value, sender: Sender<UserEvent>)
+ -> std::result::Result<(), std::io::Error>
+{
+    let data: JoinRes = serde_json::from_value(v)?;
+    sender.send(UserEvent::Join(JoinMsg{id:id, room: data.room, msg:data.msg}));
     Ok(())
 }

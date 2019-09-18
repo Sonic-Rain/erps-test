@@ -180,6 +180,12 @@ fn main() -> std::result::Result<(), std::io::Error> {
                                 info!("close: userid: {} json: {:?}", userid, v);
                                 event::close(userid, v, sender.clone())?;
                             }
+                            else if rejoin.is_match(topic_name) {
+                                let cap = rejoin.captures(topic_name).unwrap();
+                                let userid = cap[1].to_string();
+                                info!("join: userid: {} json: {:?}", userid, v);
+                                event::join(userid, v, sender.clone())?;
+                            }
                             else if restart_queue.is_match(topic_name) {
                                 let cap = restart_queue.captures(topic_name).unwrap();
                                 let userid = cap[1].to_string();
