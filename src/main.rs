@@ -3,7 +3,7 @@ use log::{info, warn, error, trace};
 
 use std::env;
 use std::io::Write;
-use std::io::Error;
+use failure::Error;
 use std::net::TcpStream;
 use std::str;
 use clap::{App, Arg};
@@ -13,9 +13,8 @@ use rumqtt::{MqttClient, MqttOptions, QoS};
 use std::thread;
 use std::time::Duration;
 use log::Level;
-use serde_json::{self, Result, Value};
+use serde_json::{self, Value};
 use regex::Regex;
-
 use ::futures::Future;
 use mysql;
 
@@ -32,7 +31,7 @@ fn generate_client_id() -> String {
     format!("ERPS_TEST_{}", Uuid::new_v4())
 }
 
-fn main() -> std::result::Result<(), std::io::Error> {
+fn main() -> std::result::Result<(), Error> {
     // configure logging
     env::set_var("RUST_LOG", env::var_os("RUST_LOG").unwrap_or_else(|| "info".into()));
     env_logger::init();
@@ -96,6 +95,7 @@ fn main() -> std::result::Result<(), std::io::Error> {
     mqtt_client.subscribe("room/+/res/prestart", QoS::AtLeastOnce).unwrap();
     mqtt_client.subscribe("room/+/res/start", QoS::AtLeastOnce).unwrap();
 
+    mqtt_client.subscribe("game/+/res/game_singal", QoS::AtLeastOnce).unwrap();
     mqtt_client.subscribe("game/+/res/game_over", QoS::AtLeastOnce).unwrap();
     mqtt_client.subscribe("game/+/res/start_game", QoS::AtLeastOnce).unwrap();
     mqtt_client.subscribe("game/+/res/choose", QoS::AtLeastOnce).unwrap();
@@ -112,13 +112,19 @@ fn main() -> std::result::Result<(), std::io::Error> {
         loop {
             select! {
                 recv(rx) -> d => {
-                    if let Ok(d) = d {
-                        match mqtt_client.publish(d.topic, QoS::AtLeastOnce, false, d.msg) {
-                            Ok(_) => {},
-                            Err(x) => {
-                                println!("publish failed!!!!");
+                    let handle = || -> Result<(), Error> {
+                        if let Ok(d) = d {
+                            match mqtt_client.publish(d.topic, QoS::AtLeastOnce, false, d.msg) {
+                                Ok(_) => {},
+                                Err(x) => {
+                                    println!("publish failed!!!!");
+                                }
                             }
                         }
+                        Ok(())
+                    };
+                    if let Err(msg) = handle() {
+                        println!("{:?}", msg);
                     }
                 }
             }
@@ -136,78 +142,106 @@ fn main() -> std::result::Result<(), std::io::Error> {
     let reinvite = Regex::new(r"\w+/(\w+)/res/invite").unwrap();
     let rejoin = Regex::new(r"\w+/(\w+)/res/join").unwrap();
     let rechoosehero = Regex::new(r"\w+/(\w+)/res/choose_hero").unwrap();
-    
+    let restart_game = Regex::new(r"\w+/(\w+)/res/start_game").unwrap();
+    let restart = Regex::new(r"\w+/(\w+)/res/start").unwrap();
+    let regame_singal = Regex::new(r"\w+/(\w+)/res/game_singal").unwrap();
+
     loop {
         use rumqtt::Notification::Publish;
         select! {
             recv(notifications) -> notification => {
-                if let Ok(x) = notification {
-                    if let Publish(x) = x {
-                        //println!("{:?}", x);
-                        let payload = x.payload;
-                        let msg = match str::from_utf8(&payload[..]) {
-                            Ok(msg) => msg,
-                            Err(err) => {
-                                error!("Failed to decode publish message {:?}", err);
-                                continue;
-                            }
-                        };
-                        let topic_name = x.topic_name.as_str();
-                        let vo : Result<Value> = serde_json::from_str(msg);
-                
-                        if let Ok(v) = vo {
-                            if relogin.is_match(topic_name) {
-                                let cap = relogin.captures(topic_name).unwrap();
-                                let userid = cap[1].to_string();
-                                info!("login: userid: {} json: {:?}", userid, v);
-                                event::login(userid, v, sender.clone())?;
-                            }
-                            else if relogout.is_match(topic_name) {
-                                let cap = relogout.captures(topic_name).unwrap();
-                                let userid = cap[1].to_string();
-                                info!("logout: userid: {} json: {:?}", userid, v);
-                                event::logout(userid, v, sender.clone())?;
-                            }
-                            else if recreate.is_match(topic_name) {
-                                let cap = recreate.captures(topic_name).unwrap();
-                                let userid = cap[1].to_string();
-                                info!("create: userid: {} json: {:?}", userid, v);
-                                event::create(userid, v, sender.clone())?;
-                            }
-                            else if reclose.is_match(topic_name) {
-                                let cap = reclose.captures(topic_name).unwrap();
-                                let userid = cap[1].to_string();
-                                info!("close: userid: {} json: {:?}", userid, v);
-                                event::close(userid, v, sender.clone())?;
-                            }
-                            else if rejoin.is_match(topic_name) {
-                                let cap = rejoin.captures(topic_name).unwrap();
-                                let userid = cap[1].to_string();
-                                info!("join: userid: {} json: {:?}", userid, v);
-                                event::join(userid, v, sender.clone())?;
-                            }
-                            else if restart_queue.is_match(topic_name) {
-                                let cap = restart_queue.captures(topic_name).unwrap();
-                                let userid = cap[1].to_string();
-                                info!("start_queue: userid: {} json: {:?}", userid, v);
-                                event::start_queue(userid, v, sender.clone())?;
-                            }
-                            else if rechoosehero.is_match(topic_name) {
-                                let cap = rechoosehero.captures(topic_name).unwrap();
-                                let userid = cap[1].to_string();
-                                info!("choose hero: userid: {} json: {:?}", userid, v);
-                                event::choose_hero(userid, v, sender.clone())?;
-                            }
-                            else if represtart.is_match(topic_name) {
-                                let cap = represtart.captures(topic_name).unwrap();
-                                let userid = cap[1].to_string();
-                                info!("prestart hero: userid: {} json: {:?}", userid, v);
-                                event::prestart(userid, v, sender.clone())?;
-                            }
-                        } else {
-                            warn!("Json Parser error");
-                        };
+                let handle = || -> Result<(), Error> {
+                    if let Ok(x) = notification {
+                        if let Publish(x) = x {
+                            //println!("{:?}", x);
+                            let payload = x.payload;
+                            let msg = match str::from_utf8(&payload[..]) {
+                                Ok(msg) => msg,
+                                Err(err) => {
+                                    return Err(failure::err_msg(format!("Failed to decode publish message {:?}", err)));
+                                }
+                            };
+                            let topic_name = x.topic_name.as_str();
+                            let vo : serde_json::Result<Value> = serde_json::from_str(msg);
+                            if let Ok(v) = vo {
+                                if relogin.is_match(topic_name) {
+                                    let cap = relogin.captures(topic_name).unwrap();
+                                    let userid = cap[1].to_string();
+                                    info!("login: userid: {} json: {:?}", userid, v);
+                                    event::login(userid, v, sender.clone())?;
+                                }
+                                else if relogout.is_match(topic_name) {
+                                    let cap = relogout.captures(topic_name).unwrap();
+                                    let userid = cap[1].to_string();
+                                    info!("logout: userid: {} json: {:?}", userid, v);
+                                    event::logout(userid, v, sender.clone())?;
+                                }
+                                else if recreate.is_match(topic_name) {
+                                    let cap = recreate.captures(topic_name).unwrap();
+                                    let userid = cap[1].to_string();
+                                    info!("create: userid: {} json: {:?}", userid, v);
+                                    event::create(userid, v, sender.clone())?;
+                                }
+                                else if reclose.is_match(topic_name) {
+                                    let cap = reclose.captures(topic_name).unwrap();
+                                    let userid = cap[1].to_string();
+                                    info!("close: userid: {} json: {:?}", userid, v);
+                                    event::close(userid, v, sender.clone())?;
+                                }
+                                else if rejoin.is_match(topic_name) {
+                                    let cap = rejoin.captures(topic_name).unwrap();
+                                    let userid = cap[1].to_string();
+                                    info!("join: userid: {} json: {:?}", userid, v);
+                                    event::join(userid, v, sender.clone())?;
+                                }
+                                else if restart_queue.is_match(topic_name) {
+                                    let cap = restart_queue.captures(topic_name).unwrap();
+                                    let userid = cap[1].to_string();
+                                    info!("start_queue: userid: {} json: {:?}", userid, v);
+                                    event::start_queue(userid, v, sender.clone())?;
+                                }
+                                else if rechoosehero.is_match(topic_name) {
+                                    let cap = rechoosehero.captures(topic_name).unwrap();
+                                    let userid = cap[1].to_string();
+                                    info!("choose hero: userid: {} json: {:?}", userid, v);
+                                    event::choose_hero(userid, v, sender.clone())?;
+                                }
+                                else if represtart.is_match(topic_name) {
+                                    let cap = represtart.captures(topic_name).unwrap();
+                                    let userid = cap[1].to_string();
+                                    info!("prestart hero: userid: {} json: {:?}", userid, v);
+                                    event::prestart(userid, v, sender.clone())?;
+                                }
+                                else if restart_game.is_match(topic_name) {
+                                    let cap = restart_game.captures(topic_name).unwrap();
+                                    let userid = cap[1].to_string();
+                                    info!("start_game hero: userid: {} json: {:?}", userid, v);
+                                    event::start_game(userid, v, sender.clone())?;
+                                }
+                                else if restart.is_match(topic_name) {
+                                    let cap = restart.captures(topic_name).unwrap();
+                                    let userid = cap[1].to_string();
+                                    info!("start hero: userid: {} json: {:?}", userid, v);
+                                    event::start(userid, v, sender.clone())?;
+                                }
+                                else if regame_singal.is_match(topic_name) {
+                                    let cap = regame_singal.captures(topic_name).unwrap();
+                                    let userid = cap[1].to_string();
+                                    info!("game_singal: userid: {} json: {:?}", userid, v);
+                                    event::game_singal(userid, v, sender.clone())?;
+                                }
+                                else {
+                                    warn!("Topic Error {}", topic_name);
+                                }
+                            } else {
+                                warn!("Json Parser error");
+                            };
+                        }
                     }
+                    Ok(())
+                };
+                if let Err(msg) = handle() {
+                    println!("{:?}", msg);
                 }
             }
         }

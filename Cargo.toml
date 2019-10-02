@@ -7,10 +7,11 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+indexmap = "1.2"
 crossbeam-channel = "0.3"
 rand = "*"
 mysql = "*"
-rumqtt = "*"
+rumqtt = { git = "https://github.com/damody/rumqtt.git" }
 clap = "2"
 log = "*"
 env_logger = "*"
@@ -24,12 +25,12 @@ failure = "0.1"
 failure_derive = "0.1"
 fnv = "1"
 futures = "0.1.18"
-native-tls = { version = "0.2", optional = true }
 regex = "1"
 serde = "1"
 serde_derive = "1"
 serde_json = "1"
-tokio = "0.1.9"
+tokio-rustls = "0.9"
+tokio = { version = "0.1.21", features = [ "codec", "io", "rt-full", "tcp", "timer" ], default-features = false }
 tokio-codec = "0.1"
 tokio-io = "0.1"
 tokio-named-pipes = "0.1"

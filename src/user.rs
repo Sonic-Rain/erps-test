@@ -4,7 +4,8 @@ use crossbeam_channel::{bounded, tick, Sender, Receiver, select};
 use rand::Rng;
 use std::cell::RefCell;
 use std::rc::Rc;
-
+use rand::seq::SliceRandom;
+use indexmap::IndexMap;
 
 #[derive(Debug, Default)]
 pub struct User {
@@ -21,8 +22,21 @@ pub struct User {
     pub isPlaying: bool,
 }
 
+#[derive(Debug, Default)]
+pub struct RoomRecord {
+    pub id: String,
+    pub ids: Vec<String>,
+}
+
+const TEAM_SIZE: usize = 2;
+
 impl User {
-    pub fn next_action(&mut self, tx: &mut Sender<MqttMsg>, room: &String) {
+    pub fn next_action(&mut self, tx: &mut Sender<MqttMsg>, rooms: &mut IndexMap<String, Rc<RefCell<RoomRecord>>>) {
+        let mut rng = rand::thread_rng();
+        let mut r = rng.gen_range(0, 10);
+        if r > 2 {
+            return ()
+        }
         if !self.isLogin {
             self.login(tx);
         }
@@ -30,11 +44,21 @@ impl User {
             self.choose_hero(tx, "freyja".to_owned());
         }
         else if !self.isInRoom {
-            if room == "" {
+            r = rng.gen_range(0, 10);
+            if r < 5 {
                 self.create(tx);
-            }
-            else {
-                self.join(tx, room.to_string());
+                let id = self.id.clone();
+                rooms.insert(
+                    id.clone(),
+                    Rc::new(RefCell::new(
+                        RoomRecord{id: id.clone(), ids:vec![id.clone()]}
+                    )));
+            } else if rooms.len() > 0 {
+                let mut n = rng.gen_range(0, rooms.len());
+                let (id, rr) = rooms.get_index(n).unwrap();
+                if rr.borrow().ids.len() < TEAM_SIZE {
+                    self.join(tx, &rr);
+                }
             }
         }
         else if !self.isStartQueue {
@@ -67,9 +91,9 @@ impl User {
         }
     }
 
-    pub fn join(&self, tx: &mut Sender<MqttMsg>, room: String) {
+    pub fn join(&self, tx: &mut Sender<MqttMsg>, room: &Rc<RefCell<RoomRecord>>) {
         if !self.isInRoom {
-            let msg = format!(r#"{{"room":"{}", "join":"{}"}}"#, room, self.id);
+            let msg = format!(r#"{{"room":"{}", "join":"{}"}}"#, room.borrow().id, self.id);
             let topic = format!("room/{}/send/join", self.id);
             tx.send(MqttMsg{topic:topic, msg:msg});
         }
