@@ -1,4 +1,4 @@
-use serde_json::{self, Result, Value};
+use serde_json::{self, Result, Value, json};
 use std::env;
 use std::io::{self, Write};
 use serde_derive::{Serialize, Deserialize};
@@ -6,6 +6,7 @@ use std::io::{ErrorKind};
 use log::{info, warn, error, trace};
 use std::thread;
 use std::time::{Duration, Instant};
+use rand::Rng;
 
 use ::futures::Future;
 use mysql;
@@ -138,6 +139,13 @@ pub struct GameSingalRes {
     pub game: u32,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct GameOverData {
+    pub game: u32,
+    pub win: Vec<String>,
+    pub lose: Vec<String>,
+}
+
 pub enum UserEvent {
     Login(LoginMsg),
     Logout(LogoutMsg),
@@ -171,7 +179,7 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
     thread::spawn(move || {
         let mut rooms: IndexMap<String, Rc<RefCell<RoomRecord>>> = IndexMap::new();
         let mut TotalUsers: BTreeMap<String, Rc<RefCell<User>>> = BTreeMap::new();
-        for i in 0..4 {
+        for i in 0..200 {
             TotalUsers.insert(i.to_string(),
                 Rc::new(RefCell::new(
                 User {
@@ -196,7 +204,6 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
                                 
                             },
                             UserEvent::GameSingal(x) => {
-                                println!("StartGame {:?}", TotalUsers);
                                 let mut tx = tx.clone();
                                 thread::spawn(move || {
                                     thread::sleep_ms(3000);
@@ -205,7 +212,27 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
                                 });
                             },
                             UserEvent::StartGame(x) => {
-                                println!("StartGame {:?}", TotalUsers);
+                                let mut data: GameOverData = Default::default();
+                                let mut rng = rand::thread_rng();
+                                let mut r = rng.gen_range(1, 3);
+                                for m in &x.member {
+                                    if m.team == r {
+                                        data.win.push(m.id.clone());
+                                    } else {
+                                        data.lose.push(m.id.clone());
+                                    }
+                                    let u = get_user(&m.id, &TotalUsers);
+                                    if let Some(u) = u {
+                                        u.borrow_mut().game_over();
+                                    }
+                                }
+                                data.game = x.game;
+                                let mut tx = tx.clone();
+                                thread::spawn(move || {
+                                    thread::sleep_ms(3000);
+                                    tx.try_send(MqttMsg{topic:format!("game/{}/send/game_over", x.game), 
+                                                    msg: json!(data).to_string()}).unwrap();
+                                    });
                             },
                             UserEvent::Join(x) => {
                                 if x.msg == "ok" {
@@ -232,9 +259,11 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
                                 }
                             },
                             UserEvent::Create(x) => {
-                                let u = get_user(&x.id, &TotalUsers);
-                                if let Some(u) = u {
-                                    u.borrow_mut().get_create();
+                                if x.msg == "ok" {
+                                    let u = get_user(&x.id, &TotalUsers);
+                                    if let Some(u) = u {
+                                        u.borrow_mut().get_create();
+                                    }
                                 }
                             },
                             UserEvent::Close(x) => {
@@ -260,7 +289,6 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
                                 if let Some(u) = u {
                                     u.borrow_mut().get_start_queue();
                                 }
-                                println!("StartQueue {:#?}", TotalUsers);
                             },
                             UserEvent::PreStart(x) => {
                                 if x.msg == "stop queue" {
@@ -280,10 +308,6 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
                                         }
                                     }
                                     println!("PreStart");
-                                    /*let u = get_user(&x.id, &TotalUsers);
-                                    if let Some(u) = u {
-                                        u.borrow_mut().get_prestart(true);
-                                    }*/
                                 }
                             },
                         }

@@ -34,7 +34,7 @@ impl User {
     pub fn next_action(&mut self, tx: &mut Sender<MqttMsg>, rooms: &mut IndexMap<String, Rc<RefCell<RoomRecord>>>) {
         let mut rng = rand::thread_rng();
         let mut r = rng.gen_range(0, 10);
-        if r > 2 {
+        if r > 4 {
             return ()
         }
         if !self.isLogin {
@@ -113,12 +113,22 @@ impl User {
             tx.send(MqttMsg{topic:topic, msg:msg});
         }
     }
+    pub fn game_over(&mut self) {
+        self.isStartQueue = false;
+        self.isPreStart = false;
+        self.isPlaying = false;
+        self.isInRoom = false;
+        self.isRoomCreater = false;
+        self.isCanPreStart = false;
+    }
     pub fn get_logout(&mut self) {
         self.isLogin = false;
         self.isChooseNGHero = false;
         self.isStartQueue = false;
         self.isPreStart = false;
         self.isPlaying = false;
+        self.isInRoom = false;
+        self.isRoomCreater = false;
     }
     pub fn choose_hero(&mut self, tx: &mut Sender<MqttMsg>, hero: String) {
         self.hero = hero;
