@@ -11,7 +11,7 @@ indexmap = "1.2"
 crossbeam-channel = "0.3"
 rand = "*"
 mysql = "*"
-rumqtt = { git = "https://github.com/damody/rumqtt.git" }
+rumqtt = "0.31"
 clap = "2"
 log = "*"
 env_logger = "*"

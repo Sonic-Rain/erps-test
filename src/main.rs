@@ -78,6 +78,8 @@ fn main() -> std::result::Result<(), Error> {
         .unwrap_or_else(generate_client_id);
     let mut mqtt_options = MqttOptions::new(client_id.as_str(), server_addr.as_str(), server_port.parse::<u16>().unwrap());
     mqtt_options = mqtt_options.set_keep_alive(100);
+    mqtt_options = mqtt_options.set_request_channel_capacity(10000);
+    mqtt_options = mqtt_options.set_notification_channel_capacity(10000);
     let (mut mqtt_client, notifications) = MqttClient::start(mqtt_options.clone()).unwrap();
     mqtt_client.subscribe("member/+/res/login", QoS::AtLeastOnce).unwrap();
     mqtt_client.subscribe("member/+/res/logout", QoS::AtLeastOnce).unwrap();
@@ -101,13 +103,15 @@ fn main() -> std::result::Result<(), Error> {
     mqtt_client.subscribe("game/+/res/choose", QoS::AtLeastOnce).unwrap();
     mqtt_client.subscribe("game/+/res/exit", QoS::AtLeastOnce).unwrap();
 
-    let (tx, rx):(Sender<MqttMsg>, Receiver<MqttMsg>) = bounded(1000);
+    let (tx, rx):(Sender<MqttMsg>, Receiver<MqttMsg>) = bounded(10000);
     let mut sender: Sender<UserEvent> = event::init(tx.clone());
     thread::sleep_ms(100);
     thread::spawn(move || {
         let mut pkid = 100;
         let mut mqtt_options = MqttOptions::new(generate_client_id(), server_addr, server_port.parse::<u16>().unwrap());
         mqtt_options = mqtt_options.set_keep_alive(100);
+        mqtt_options = mqtt_options.set_request_channel_capacity(10000);
+        mqtt_options = mqtt_options.set_notification_channel_capacity(10000);
         let (mut mqtt_client, notifications) = MqttClient::start(mqtt_options.clone()).unwrap();
         loop {
             select! {
