@@ -12,6 +12,7 @@ pub struct User {
     pub id: String,
     pub hero: String,
     pub room: String,
+    pub cnt: i32,
     pub isLogin: bool,
     pub isInRoom: bool,
     pub isRoomCreater: bool,
@@ -28,14 +29,18 @@ pub struct RoomRecord {
     pub ids: Vec<String>,
 }
 
-const TEAM_SIZE: usize = 2;
+const TEAM_SIZE: usize = 3;
 
 impl User {
     pub fn next_action(&mut self, tx: &mut Sender<MqttMsg>, rooms: &mut IndexMap<String, Rc<RefCell<RoomRecord>>>) {
         let mut rng = rand::thread_rng();
         let mut r = rng.gen_range(0, 10);
         if r > 4 {
-            return ()
+            //return ()
+        }
+        if self.cnt >= 0 && self.cnt < 10 {
+            self.cnt += 1;
+            return()
         }
         if !self.isLogin {
             self.login(tx);
@@ -65,8 +70,10 @@ impl User {
             self.start_queue(tx);
         }
         else if self.isCanPreStart {
+            //self.prestart_get(tx);
             self.prestart(tx);
         }
+        self.cnt = 0;
     }
     pub fn back_action(&mut self, tx: &mut Sender<MqttMsg>) {
         if self.isLogin {
@@ -181,19 +188,27 @@ impl User {
     pub fn get_start_queue(&mut self) {
         self.isStartQueue = true;
     }
+
+    pub fn start_get (&mut self) {
+        self.isPreStart = true;
+    }
+
     pub fn prestart(&mut self, tx: &mut Sender<MqttMsg>) {
         if self.isCanPreStart && !self.isPreStart {
-            self.isPreStart = true;
+            //self.isPreStart = true;
             let mut rng = rand::thread_rng();
             let msg = format!(r#"{{"room":"{}", "id":"{}", "accept":true}}"#, self.room, self.id);
             let topic = format!("room/{}/send/prestart", self.id);
             tx.try_send(MqttMsg{topic:topic, msg:msg}).unwrap();
         }
     }
-    pub fn get_prestart(&mut self, res: bool) {
+    pub fn get_prestart(&mut self, res: bool, tx: &mut Sender<MqttMsg>) {
         self.isCanPreStart = res;
         if res == false {
             self.isPreStart = false;
+        }
+        if res == true {
+            tx.try_send(MqttMsg{topic: format!(r#"room/{}/send/prestart_get"#, self.id), msg: format!(r#"{{"room":"{}", "id":"{}"}}"#, self.room, self.id)});
         }
     }
     pub fn invite(&mut self, tx: &mut Sender<MqttMsg>) {

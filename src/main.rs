@@ -95,7 +95,9 @@ fn main() -> std::result::Result<(), Error> {
     mqtt_client.subscribe("room/+/res/kick", QoS::AtLeastOnce).unwrap();
     mqtt_client.subscribe("room/+/res/leave", QoS::AtLeastOnce).unwrap();
     mqtt_client.subscribe("room/+/res/prestart", QoS::AtLeastOnce).unwrap();
+    //mqtt_client.subscribe("room/+/res/prestart_get", QoS::AtLeastOnce).unwrap();
     mqtt_client.subscribe("room/+/res/start", QoS::AtLeastOnce).unwrap();
+    mqtt_client.subscribe("room/+/res/start_get", QoS::AtLeastOnce).unwrap();
 
     mqtt_client.subscribe("game/+/res/game_singal", QoS::AtLeastOnce).unwrap();
     mqtt_client.subscribe("game/+/res/game_over", QoS::AtLeastOnce).unwrap();
@@ -143,10 +145,12 @@ fn main() -> std::result::Result<(), Error> {
     let restart_queue = Regex::new(r"\w+/(\w+)/res/start_queue").unwrap();
     let recancel_queue = Regex::new(r"\w+/(\w+)/res/cancel_queue").unwrap();
     let represtart = Regex::new(r"\w+/(\w+)/res/prestart").unwrap();
+    //let represtart_get = Regex::new(r"\w+/(\w+)/res/prestart_get").unwrap();
     let reinvite = Regex::new(r"\w+/(\w+)/res/invite").unwrap();
     let rejoin = Regex::new(r"\w+/(\w+)/res/join").unwrap();
     let rechoosehero = Regex::new(r"\w+/(\w+)/res/choose_hero").unwrap();
     let restart_game = Regex::new(r"\w+/(\w+)/res/start_game").unwrap();
+    let restart_get = Regex::new(r"\w+/(\w+)/res/start_get").unwrap();
     let restart = Regex::new(r"\w+/(\w+)/res/start").unwrap();
     let regame_singal = Regex::new(r"\w+/(\w+)/res/game_singal").unwrap();
 
@@ -215,6 +219,12 @@ fn main() -> std::result::Result<(), Error> {
                                     let userid = cap[1].to_string();
                                     info!("prestart hero: userid: {} json: {:?}", userid, v);
                                     event::prestart(userid, v, sender.clone())?;
+                                }
+                                else if restart_get.is_match(topic_name) {
+                                    let cap = restart_get.captures(topic_name).unwrap();
+                                    let userid = cap[1].to_string();
+                                    info!("prestart hero: userid: {} json: {:?}", userid, v);
+                                    event::start_get(userid, v, sender.clone())?;
                                 }
                                 else if restart_game.is_match(topic_name) {
                                     let cap = restart_game.captures(topic_name).unwrap();

@@ -119,6 +119,12 @@ pub struct StartRes {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct StartGetMsg {
+    pub id: String,
+    pub msg: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct StartGameRes {
     pub game: u32,
     pub member: Vec<HeroCell>,
@@ -158,6 +164,7 @@ pub enum UserEvent {
     Join(JoinMsg),
     StartGame(StartGameRes),
     Start(StartRes),
+    StartGet(StartGetMsg),
     GameSingal(GameSingalRes),
 }
 
@@ -170,7 +177,7 @@ fn get_user(id: &String, users: &BTreeMap<String, Rc<RefCell<User>>>) -> Option<
 }
 
 pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
-    let (tx, rx):(Sender<UserEvent>, Receiver<UserEvent>) = bounded(1000);
+    let (tx, rx):(Sender<UserEvent>, Receiver<UserEvent>) = bounded(100000);
     let start = Instant::now();
     let update500ms = tick(Duration::from_millis(500));
     let update100ms = tick(Duration::from_millis(100));
@@ -179,12 +186,13 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
     thread::spawn(move || {
         let mut rooms: IndexMap<String, Rc<RefCell<RoomRecord>>> = IndexMap::new();
         let mut TotalUsers: BTreeMap<String, Rc<RefCell<User>>> = BTreeMap::new();
-        for i in 0..2000 {
+        for i in 0..6 {
             TotalUsers.insert(i.to_string(),
                 Rc::new(RefCell::new(
                 User {
                     id: i.to_string(),
                     hero: "".to_string(),
+                    cnt: -1,
                     ..Default::default()
                 }
             )));
@@ -194,6 +202,7 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
             select! {
                 recv(update500ms) -> _ => {
                     for (i, u) in &mut TotalUsers {
+                        //println!("User {} Action", i);
                         u.borrow_mut().next_action(&mut tx, &mut rooms);
                     }
                 }
@@ -229,7 +238,7 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
                                 data.game = x.game;
                                 let mut tx = tx.clone();
                                 thread::spawn(move || {
-                                    thread::sleep_ms(3000);
+                                    thread::sleep_ms(5000);
                                     tx.try_send(MqttMsg{topic:format!("game/{}/send/game_over", x.game), 
                                                     msg: json!(data).to_string()}).unwrap();
                                     });
@@ -238,6 +247,7 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
                                 if x.msg == "ok" {
                                     let u = get_user(&x.id, &TotalUsers);
                                     if let Some(u) = u {
+                                        u.borrow_mut().cnt = -1;
                                         u.borrow_mut().get_join(x.room.clone());
                                     }
                                     let r = rooms.get(&x.room);
@@ -249,12 +259,14 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
                             UserEvent::Login(x) => {
                                 let u = get_user(&x.id, &TotalUsers);
                                 if let Some(u) = u {
+                                    u.borrow_mut().cnt = -1;
                                     u.borrow_mut().get_login();
                                 }
                             },
                             UserEvent::Logout(x) => {
                                 let u = get_user(&x.id, &TotalUsers);
                                 if let Some(u) = u {
+                                    u.borrow_mut().cnt = -1;
                                     u.borrow_mut().get_logout();
                                 }
                             },
@@ -262,6 +274,7 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
                                 if x.msg == "ok" {
                                     let u = get_user(&x.id, &TotalUsers);
                                     if let Some(u) = u {
+                                        u.borrow_mut().cnt = -1;
                                         u.borrow_mut().get_create();
                                     }
                                 }
@@ -269,32 +282,44 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
                             UserEvent::Close(x) => {
                                 let u = get_user(&x.room, &TotalUsers);
                                 if let Some(u) = u {
+                                    u.borrow_mut().cnt = -1;
                                     u.borrow_mut().get_close();
                                 }
                             },
                             UserEvent::ChooseNGHero(x) => {
                                 let u = get_user(&x.id, &TotalUsers);
                                 if let Some(u) = u {
+                                    u.borrow_mut().cnt = -1;
                                     u.borrow_mut().get_choose_hero(x.hero);
                                 }
                             },
                             UserEvent::Invite(x) => {
                                 let u = get_user(&x.id, &TotalUsers);
                                 if let Some(u) = u {
+                                    u.borrow_mut().cnt = -1;
                                     u.borrow_mut().get_invite();
                                 }
                             },
                             UserEvent::StartQueue(x) => {
                                 let u = get_user(&x.id, &TotalUsers);
                                 if let Some(u) = u {
+                                    u.borrow_mut().cnt = -1;
                                     u.borrow_mut().get_start_queue();
+                                }
+                            },
+                            UserEvent::StartGet(x) => {
+                                //println!("in");
+                                let u = get_user(&x.id, &TotalUsers);
+                                if let Some(u) = u {
+                                    u.borrow_mut().start_get();
                                 }
                             },
                             UserEvent::PreStart(x) => {
                                 if x.msg == "stop queue" {
                                     let u = get_user(&x.id, &TotalUsers);
                                     if let Some(u) = u {
-                                        u.borrow_mut().get_prestart(false);
+                                        u.borrow_mut().cnt = -1;
+                                        u.borrow_mut().get_prestart(false, &mut tx);
                                     }
                                 }
                                 else {
@@ -302,8 +327,10 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
                                     if let Some(r) = r {
                                         for id in &r.borrow().ids {
                                             let u = get_user(&id, &TotalUsers);
+                                            println!("room: {}, userid: {}", &x.id, id);
                                             if let Some(u) = u {
-                                                u.borrow_mut().get_prestart(true);
+                                                u.borrow_mut().cnt = -1;
+                                                u.borrow_mut().get_prestart(true, &mut tx);
                                             }
                                         }
                                     }
@@ -364,6 +391,14 @@ pub fn start_queue(id: String, v: Value, sender: Sender<UserEvent>)
 {
     let data: StartQueueRes = serde_json::from_value(v)?;
     sender.send(UserEvent::StartQueue(StartQueueMsg{id:id, msg:data.msg}));
+    Ok(())
+}
+
+pub fn start_get(id: String, v: Value, sender: Sender<UserEvent>)
+ -> std::result::Result<(), Error>
+{
+    let data: StartQueueRes = serde_json::from_value(v)?;
+    sender.send(UserEvent::StartGet(StartGetMsg{id:id, msg:data.msg}));
     Ok(())
 }
 
