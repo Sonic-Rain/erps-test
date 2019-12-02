@@ -186,7 +186,7 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
     thread::spawn(move || {
         let mut rooms: IndexMap<String, Rc<RefCell<RoomRecord>>> = IndexMap::new();
         let mut TotalUsers: BTreeMap<String, Rc<RefCell<User>>> = BTreeMap::new();
-        for i in 0..2 {
+        for i in 0..1000 {
             TotalUsers.insert(i.to_string(),
                 Rc::new(RefCell::new(
                 User {
@@ -230,18 +230,21 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
                                     } else {
                                         data.lose.push(m.id.clone());
                                     }
+                                    
+                                }
+                                data.game = x.game;
+                                let mut tx = tx.clone();
+                                //thread::spawn(move || {
+                                //    thread::sleep_ms(5000);
+                                tx.try_send(MqttMsg{topic:format!("game/{}/send/game_over", x.game), 
+                                                msg: json!(data).to_string()}).unwrap();
+                                for m in &x.member {
                                     let u = get_user(&m.id, &TotalUsers);
                                     if let Some(u) = u {
                                         u.borrow_mut().game_over();
                                     }
-                                }
-                                data.game = x.game;
-                                let mut tx = tx.clone();
-                                thread::spawn(move || {
-                                    thread::sleep_ms(5000);
-                                    tx.try_send(MqttMsg{topic:format!("game/{}/send/game_over", x.game), 
-                                                    msg: json!(data).to_string()}).unwrap();
-                                    });
+                                }    
+                                //});
                             },
                             UserEvent::Join(x) => {
                                 if x.msg == "ok" {
@@ -311,6 +314,7 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
                                 //println!("in");
                                 let u = get_user(&x.id, &TotalUsers);
                                 if let Some(u) = u {
+                                    u.borrow_mut().isPlaying = true;
                                     u.borrow_mut().start_get();
                                 }
                             },
@@ -327,7 +331,7 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
                                     if let Some(r) = r {
                                         for id in &r.borrow().ids {
                                             let u = get_user(&id, &TotalUsers);
-                                            println!("room: {}, userid: {}", &x.id, id);
+                                            //println!("room: {}, userid: {}", &x.id, id);
                                             if let Some(u) = u {
                                                 u.borrow_mut().cnt = -1;
                                                 u.borrow_mut().get_prestart(true, &mut tx);
