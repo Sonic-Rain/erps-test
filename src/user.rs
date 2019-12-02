@@ -29,7 +29,7 @@ pub struct RoomRecord {
     pub ids: Vec<String>,
 }
 
-const TEAM_SIZE: usize = 3;
+const TEAM_SIZE: usize = 1;
 
 impl User {
     pub fn next_action(&mut self, tx: &mut Sender<MqttMsg>, rooms: &mut IndexMap<String, Rc<RefCell<RoomRecord>>>) {
@@ -203,12 +203,17 @@ impl User {
         }
     }
     pub fn get_prestart(&mut self, res: bool, tx: &mut Sender<MqttMsg>) {
-        self.isCanPreStart = res;
+        //
         if res == false {
             self.isPreStart = false;
         }
         if res == true {
-            tx.try_send(MqttMsg{topic: format!(r#"room/{}/send/prestart_get"#, self.id), msg: format!(r#"{{"room":"{}", "id":"{}"}}"#, self.room, self.id)});
+            let mut rng = rand::thread_rng();
+            let mut r = rng.gen_range(0, 10);
+            if r < 5 {
+                self.isCanPreStart = res;
+                tx.try_send(MqttMsg{topic: format!(r#"room/{}/send/prestart_get"#, self.id), msg: format!(r#"{{"room":"{}", "id":"{}"}}"#, self.room, self.id)});
+            }
         }
     }
     pub fn invite(&mut self, tx: &mut Sender<MqttMsg>) {

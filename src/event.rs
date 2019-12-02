@@ -186,7 +186,7 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
     thread::spawn(move || {
         let mut rooms: IndexMap<String, Rc<RefCell<RoomRecord>>> = IndexMap::new();
         let mut TotalUsers: BTreeMap<String, Rc<RefCell<User>>> = BTreeMap::new();
-        for i in 0..6 {
+        for i in 0..2 {
             TotalUsers.insert(i.to_string(),
                 Rc::new(RefCell::new(
                 User {
