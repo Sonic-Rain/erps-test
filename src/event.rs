@@ -152,6 +152,36 @@ pub struct GameOverData {
     pub lose: Vec<String>,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct GameInfoData {
+    pub game: u32,
+    pub users: Vec<UserInfoData>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct UserInfoData {
+    pub id: String,
+    pub hero: String,
+    pub level: u16,
+    pub equ: Vec<String>,
+    pub damage: u16, 
+    pub take_damage: u16,
+    pub heal: u16,
+    pub kill: u16,
+    pub death: u16,
+    pub assist: u16,
+    pub gift: UserGift,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct UserGift {
+    pub A: u16,
+    pub B: u16,
+    pub C: u16,
+    pub D: u16,
+    pub E: u16,
+}
+
 pub enum UserEvent {
     Login(LoginMsg),
     Logout(LogoutMsg),
@@ -186,7 +216,7 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
     thread::spawn(move || {
         let mut rooms: IndexMap<String, Rc<RefCell<RoomRecord>>> = IndexMap::new();
         let mut TotalUsers: BTreeMap<String, Rc<RefCell<User>>> = BTreeMap::new();
-        for i in 0..1000 {
+        for i in 0..6 {
             TotalUsers.insert(i.to_string(),
                 Rc::new(RefCell::new(
                 User {
@@ -222,6 +252,7 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
                             },
                             UserEvent::StartGame(x) => {
                                 let mut data: GameOverData = Default::default();
+                                let mut data1: GameInfoData = Default::default();
                                 let mut rng = rand::thread_rng();
                                 let mut r = rng.gen_range(1, 3);
                                 for m in &x.member {
@@ -230,20 +261,63 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
                                     } else {
                                         data.lose.push(m.id.clone());
                                     }
-                                    
+                                    let u = get_user(&m.id, &TotalUsers);
+                                    if let Some(u) = u {
+                                        let mut userinfo: UserInfoData = Default::default();
+                                        
+                                        u.borrow_mut().game_over();
+                                        userinfo.id = u.borrow().id.clone();
+                                        userinfo.hero = u.borrow().hero.clone();
+
+                                        r = rng.gen_range(13, 16);
+                                        userinfo.level = r;
+
+                                        r = rng.gen_range(1000, 3000);                                        
+                                        userinfo.damage = r;
+
+                                        userinfo.equ.push("bz".to_string());
+                                        userinfo.equ.push("uti".to_string());
+                                        userinfo.equ.push("666".to_string());
+
+                                        r = rng.gen_range(1000, 3000);                                        
+                                        userinfo.take_damage = r;
+
+                                        r = rng.gen_range(500, 1000);
+                                        userinfo.heal = r;
+
+                                        r = rng.gen_range(0, 4);
+                                        userinfo.kill = r;
+
+                                        r = rng.gen_range(0, 3);
+                                        userinfo.death = r;
+
+                                        r = rng.gen_range(0, 5);
+                                        userinfo.assist = r;
+
+                                        r = rng.gen_range(0, 4);
+                                        userinfo.gift.A = r;
+                                        r = rng.gen_range(0, 4);
+                                        userinfo.gift.B = r;
+                                        r = rng.gen_range(0, 4);
+                                        userinfo.gift.C = r;
+                                        r = rng.gen_range(0, 4);
+                                        userinfo.gift.D = r;
+                                        r = rng.gen_range(0, 4);
+                                        userinfo.gift.E = r;
+
+
+                                        data1.users.push(userinfo);
+                                    }
                                 }
                                 data.game = x.game;
+                                data1.game = x.game;
                                 let mut tx = tx.clone();
                                 //thread::spawn(move || {
                                 //    thread::sleep_ms(5000);
                                 tx.try_send(MqttMsg{topic:format!("game/{}/send/game_over", x.game), 
                                                 msg: json!(data).to_string()}).unwrap();
-                                for m in &x.member {
-                                    let u = get_user(&m.id, &TotalUsers);
-                                    if let Some(u) = u {
-                                        u.borrow_mut().game_over();
-                                    }
-                                }    
+                                tx.try_send(MqttMsg{topic:format!("game/{}/send/game_info", x.game), 
+                                                msg: json!(data1).to_string()}).unwrap();
                                 //});
                             },
                             UserEvent::Join(x) => {
@@ -331,7 +405,7 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
                                     if let Some(r) = r {
                                         for id in &r.borrow().ids {
                                             let u = get_user(&id, &TotalUsers);
-                                            //println!("room: {}, userid: {}", &x.id, id);
+                                            println!("room: {}, userid: {}", &x.id, id);
                                             if let Some(u) = u {
                                                 u.borrow_mut().cnt = -1;
                                                 u.borrow_mut().get_prestart(true, &mut tx);

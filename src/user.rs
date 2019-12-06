@@ -29,16 +29,16 @@ pub struct RoomRecord {
     pub ids: Vec<String>,
 }
 
-const TEAM_SIZE: usize = 5;
+const TEAM_SIZE: usize = 3;
 
 impl User {
     pub fn next_action(&mut self, tx: &mut Sender<MqttMsg>, rooms: &mut IndexMap<String, Rc<RefCell<RoomRecord>>>) {
         let mut rng = rand::thread_rng();
         let mut r = rng.gen_range(0, 10);
         if r > 4 {
-            return ()
+            //return ()
         }
-        if self.cnt >= 0 && self.cnt < 100 || self.isPlaying{
+        if self.cnt >= 0 && self.cnt < 10 || self.isPlaying{
             self.cnt += 1;
             return()
         }
