@@ -207,16 +207,16 @@ fn get_user(id: &String, users: &BTreeMap<String, Rc<RefCell<User>>>) -> Option<
 }
 
 pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
-    let (tx, rx):(Sender<UserEvent>, Receiver<UserEvent>) = bounded(100000);
+    let (tx, rx):(Sender<UserEvent>, Receiver<UserEvent>) = bounded(10000);
     let start = Instant::now();
     let update500ms = tick(Duration::from_millis(500));
     let update100ms = tick(Duration::from_millis(100));
-    
+    let tx2 = tx.clone();
     
     thread::spawn(move || {
         let mut rooms: IndexMap<String, Rc<RefCell<RoomRecord>>> = IndexMap::new();
         let mut TotalUsers: BTreeMap<String, Rc<RefCell<User>>> = BTreeMap::new();
-        for i in 0..6 {
+        for i in 0..200000 {
             TotalUsers.insert(i.to_string(),
                 Rc::new(RefCell::new(
                 User {
@@ -231,6 +231,7 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
         loop {
             select! {
                 recv(update500ms) -> _ => {
+                    println!("rx len: {}, tx len: {}", rx.len(), tx2.len());
                     for (i, u) in &mut TotalUsers {
                         //println!("User {} Action", i);
                         u.borrow_mut().next_action(&mut tx, &mut rooms);
@@ -251,6 +252,7 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
                                 });
                             },
                             UserEvent::StartGame(x) => {
+                                println!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
                                 let mut data: GameOverData = Default::default();
                                 let mut data1: GameInfoData = Default::default();
                                 let mut rng = rand::thread_rng();
@@ -405,8 +407,11 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
                                     if let Some(r) = r {
                                         for id in &r.borrow().ids {
                                             let u = get_user(&id, &TotalUsers);
-                                            println!("room: {}, userid: {}", &x.id, id);
+                                            //println!("room: {}, userid: {}", &x.id, id);
                                             if let Some(u) = u {
+                                                if u.borrow().isPreStart {
+                                                    continue;
+                                                }
                                                 u.borrow_mut().cnt = -1;
                                                 u.borrow_mut().get_prestart(true, &mut tx);
                                             }
