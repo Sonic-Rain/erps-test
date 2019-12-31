@@ -29,7 +29,7 @@ pub struct RoomRecord {
     pub ids: Vec<String>,
 }
 
-const TEAM_SIZE: usize = 5;
+const TEAM_SIZE: usize = 1;
 
 impl User {
     pub fn next_action(&mut self, tx: &mut Sender<MqttMsg>, rooms: &mut IndexMap<String, Rc<RefCell<RoomRecord>>>) {
@@ -94,7 +94,7 @@ impl User {
         if !self.isLogin {
             let msg = format!(r#"{{"id":"{}"}}"#, self.id);
             let topic = format!("member/{}/send/login", self.id);
-            tx.send(MqttMsg{topic:topic, msg:msg});
+            tx.try_send(MqttMsg{topic:topic, msg:msg});
         }
     }
 
@@ -102,7 +102,7 @@ impl User {
         if !self.isInRoom {
             let msg = format!(r#"{{"room":"{}", "join":"{}"}}"#, room.borrow().id, self.id);
             let topic = format!("room/{}/send/join", self.id);
-            tx.send(MqttMsg{topic:topic, msg:msg});
+            tx.try_send(MqttMsg{topic:topic, msg:msg});
         }
     }
     pub fn get_join(&mut self, room: String) {
@@ -117,7 +117,7 @@ impl User {
         if self.isLogin {
             let msg = format!(r#"{{"id":"{}"}}"#, self.id);
             let topic = format!("member/{}/send/logout", self.id);
-            tx.send(MqttMsg{topic:topic, msg:msg});
+            tx.try_send(MqttMsg{topic:topic, msg:msg});
         }
     }
     pub fn game_over(&mut self) {
@@ -142,7 +142,7 @@ impl User {
         if !self.isChooseNGHero {
             let msg = format!(r#"{{"id":"{}", "hero":"{}"}}"#, self.id, self.hero);
             let topic = format!("member/{}/send/choose_hero", self.id);
-            tx.send(MqttMsg{topic:topic, msg:msg});
+            tx.try_send(MqttMsg{topic:topic, msg:msg});
         }
     }
     pub fn get_choose_hero(&mut self, hero: String) {
@@ -155,7 +155,7 @@ impl User {
         if !self.isInRoom {
             let msg = format!(r#"{{"id":"{}"}}"#, self.id);
             let topic = format!("room/{}/send/create", self.id);
-            tx.send(MqttMsg{topic:topic, msg:msg});
+            tx.try_send(MqttMsg{topic:topic, msg:msg});
             self.room = self.id.clone();
         }
     }
@@ -168,7 +168,7 @@ impl User {
         if self.isInRoom {
             let msg = format!(r#"{{"id":"{}"}}"#, self.id);
             let topic = format!("room/{}/send/close", self.id);
-            tx.send(MqttMsg{topic:topic, msg:msg});
+            tx.try_send(MqttMsg{topic:topic, msg:msg});
         }
     }
     pub fn get_close(&mut self) {
@@ -182,7 +182,7 @@ impl User {
         if !self.isStartQueue {
             let msg = format!(r#"{{"id":"{}", "action":"start queue"}}"#, self.id);
             let topic = format!("room/{}/send/start_queue", self.room);
-            tx.send(MqttMsg{topic:topic, msg:msg});
+            tx.try_send(MqttMsg{topic:topic, msg:msg});
         }
     }
     pub fn get_start_queue(&mut self) {

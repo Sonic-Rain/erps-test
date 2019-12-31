@@ -70,7 +70,7 @@ fn main() -> std::result::Result<(), Error> {
                 .help("Client identifier"),
         ).get_matches();
 
-    let server_addr = matches.value_of("SERVER").unwrap_or("127.0.0.1").to_owned();
+    let server_addr = matches.value_of("SERVER").unwrap_or("59.126.81.58").to_owned();
     let server_port = matches.value_of("PORT").unwrap_or("1883").to_owned();
     let client_id = matches
         .value_of("CLIENT_ID")
@@ -105,7 +105,7 @@ fn main() -> std::result::Result<(), Error> {
     mqtt_client.subscribe("game/+/res/choose", QoS::AtLeastOnce).unwrap();
     mqtt_client.subscribe("game/+/res/exit", QoS::AtLeastOnce).unwrap();
 
-    let (tx, rx):(Sender<MqttMsg>, Receiver<MqttMsg>) = bounded(100000);
+    let (tx, rx):(Sender<MqttMsg>, Receiver<MqttMsg>) = bounded(10000);
     let mut sender: Sender<UserEvent> = event::init(tx.clone());
     thread::sleep_ms(100);
     for _ in 0..16 {
@@ -165,6 +165,8 @@ fn main() -> std::result::Result<(), Error> {
     let restart = Regex::new(r"\w+/(\w+)/res/start").unwrap();
     let regame_singal = Regex::new(r"\w+/(\w+)/res/game_singal").unwrap();
 
+    let redead = Regex::new(r"\w+/(\w+)/res/dead").unwrap();
+
     loop {
         use rumqtt::Notification::Publish;
         select! {
@@ -186,7 +188,7 @@ fn main() -> std::result::Result<(), Error> {
                                 if relogin.is_match(topic_name) {
                                     let cap = relogin.captures(topic_name).unwrap();
                                     let userid = cap[1].to_string();
-                                    //info!("login: userid: {} json: {:?}", userid, v);
+                                    info!("login: userid: {} json: {:?}", userid, v);
                                     event::login(userid, v, sender.clone())?;
                                 }
                                 else if relogout.is_match(topic_name) {
@@ -254,6 +256,9 @@ fn main() -> std::result::Result<(), Error> {
                                     let userid = cap[1].to_string();
                                     //info!("game_singal: userid: {} json: {:?}", userid, v);
                                     event::game_singal(userid, v, sender.clone())?;
+                                }
+                                else if redead.is_match(topic_name) {
+                                    thread::sleep(Duration::from_millis(5000));
                                 }
                                 else {
                                     warn!("Topic Error {}", topic_name);

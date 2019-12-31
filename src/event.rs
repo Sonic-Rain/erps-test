@@ -216,7 +216,7 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
     thread::spawn(move || {
         let mut rooms: IndexMap<String, Rc<RefCell<RoomRecord>>> = IndexMap::new();
         let mut TotalUsers: BTreeMap<String, Rc<RefCell<User>>> = BTreeMap::new();
-        for i in 0..200000 {
+        for i in 0..10 {
             TotalUsers.insert(i.to_string(),
                 Rc::new(RefCell::new(
                 User {
@@ -252,7 +252,7 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
                                 });
                             },
                             UserEvent::StartGame(x) => {
-                                println!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                                //println!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
                                 let mut data: GameOverData = Default::default();
                                 let mut data1: GameInfoData = Default::default();
                                 let mut rng = rand::thread_rng();
