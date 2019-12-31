@@ -28,7 +28,8 @@ use crate::event::*;
 
 
 fn generate_client_id() -> String {
-    format!("ERPS_TEST_{}", Uuid::new_v4())
+    let s = format!("Elo_Test_{}", Uuid::new_v4());
+    (&s[..16]).to_string()
 }
 
 fn main() -> std::result::Result<(), Error> {
@@ -81,34 +82,34 @@ fn main() -> std::result::Result<(), Error> {
     mqtt_options = mqtt_options.set_request_channel_capacity(10000);
     mqtt_options = mqtt_options.set_notification_channel_capacity(100000);
     let (mut mqtt_client, notifications) = MqttClient::start(mqtt_options.clone()).unwrap();
-    mqtt_client.subscribe("member/+/res/login", QoS::AtLeastOnce).unwrap();
-    mqtt_client.subscribe("member/+/res/logout", QoS::AtLeastOnce).unwrap();
-    mqtt_client.subscribe("member/+/res/choose_hero", QoS::AtLeastOnce).unwrap();
+    mqtt_client.subscribe("member/+/res/login", QoS::AtMostOnce).unwrap();
+    mqtt_client.subscribe("member/+/res/logout", QoS::AtMostOnce).unwrap();
+    mqtt_client.subscribe("member/+/res/choose_hero", QoS::AtMostOnce).unwrap();
 
-    mqtt_client.subscribe("room/+/res/create", QoS::AtLeastOnce).unwrap();
-    mqtt_client.subscribe("room/+/res/close", QoS::AtLeastOnce).unwrap();
-    mqtt_client.subscribe("room/+/res/start_queue", QoS::AtLeastOnce).unwrap();
-    mqtt_client.subscribe("room/+/res/cancel_queue", QoS::AtLeastOnce).unwrap();
-    mqtt_client.subscribe("room/+/res/invite", QoS::AtLeastOnce).unwrap();
-    mqtt_client.subscribe("room/+/res/join", QoS::AtLeastOnce).unwrap();
-    mqtt_client.subscribe("room/+/res/accept_join", QoS::AtLeastOnce).unwrap();
-    mqtt_client.subscribe("room/+/res/kick", QoS::AtLeastOnce).unwrap();
-    mqtt_client.subscribe("room/+/res/leave", QoS::AtLeastOnce).unwrap();
-    mqtt_client.subscribe("room/+/res/prestart", QoS::AtLeastOnce).unwrap();
+    mqtt_client.subscribe("room/+/res/create", QoS::AtMostOnce).unwrap();
+    mqtt_client.subscribe("room/+/res/close", QoS::AtMostOnce).unwrap();
+    mqtt_client.subscribe("room/+/res/start_queue", QoS::AtMostOnce).unwrap();
+    mqtt_client.subscribe("room/+/res/cancel_queue", QoS::AtMostOnce).unwrap();
+    mqtt_client.subscribe("room/+/res/invite", QoS::AtMostOnce).unwrap();
+    mqtt_client.subscribe("room/+/res/join", QoS::AtMostOnce).unwrap();
+    mqtt_client.subscribe("room/+/res/accept_join", QoS::AtMostOnce).unwrap();
+    mqtt_client.subscribe("room/+/res/kick", QoS::AtMostOnce).unwrap();
+    mqtt_client.subscribe("room/+/res/leave", QoS::AtMostOnce).unwrap();
+    mqtt_client.subscribe("room/+/res/prestart", QoS::AtMostOnce).unwrap();
     //mqtt_client.subscribe("room/+/res/prestart_get", QoS::AtLeastOnce).unwrap();
-    mqtt_client.subscribe("room/+/res/start", QoS::AtLeastOnce).unwrap();
-    mqtt_client.subscribe("room/+/res/start_get", QoS::AtLeastOnce).unwrap();
+    mqtt_client.subscribe("room/+/res/start", QoS::AtMostOnce).unwrap();
+    mqtt_client.subscribe("room/+/res/start_get", QoS::AtMostOnce).unwrap();
 
-    mqtt_client.subscribe("game/+/res/game_singal", QoS::AtLeastOnce).unwrap();
-    mqtt_client.subscribe("game/+/res/game_over", QoS::AtLeastOnce).unwrap();
-    mqtt_client.subscribe("game/+/res/start_game", QoS::AtLeastOnce).unwrap();
-    mqtt_client.subscribe("game/+/res/choose", QoS::AtLeastOnce).unwrap();
-    mqtt_client.subscribe("game/+/res/exit", QoS::AtLeastOnce).unwrap();
+    mqtt_client.subscribe("game/+/res/game_singal", QoS::AtMostOnce).unwrap();
+    mqtt_client.subscribe("game/+/res/game_over", QoS::AtMostOnce).unwrap();
+    mqtt_client.subscribe("game/+/res/start_game", QoS::AtMostOnce).unwrap();
+    mqtt_client.subscribe("game/+/res/choose", QoS::AtMostOnce).unwrap();
+    mqtt_client.subscribe("game/+/res/exit", QoS::AtMostOnce).unwrap();
 
     let (tx, rx):(Sender<MqttMsg>, Receiver<MqttMsg>) = bounded(10000);
     let mut sender: Sender<UserEvent> = event::init(tx.clone());
     thread::sleep_ms(100);
-    for _ in 0..16 {
+    for _ in 0..8 {
         let server_addr = server_addr.clone();
         let server_port = server_port.clone();
         let rx = rx.clone();
@@ -131,10 +132,12 @@ fn main() -> std::result::Result<(), Error> {
                     recv(rx) -> d => {
                         let handle = || -> Result<(), Error> {
                             if let Ok(d) = d {
-                                match mqtt_client.publish(d.topic, QoS::AtLeastOnce, false, d.msg) {
-                                    Ok(_) => {},
-                                    Err(x) => {
-                                        println!("publish failed!!!!");
+                                if d.topic.len() > 2 {
+                                    match mqtt_client.publish(d.topic, QoS::AtMostOnce, false, d.msg) {
+                                        Ok(_) => {},
+                                        Err(x) => {
+                                            println!("publish failed!!!!");
+                                        }
                                     }
                                 }
                             }
