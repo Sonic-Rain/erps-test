@@ -43,11 +43,13 @@ pub struct LogoutMsg {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CreateRoomRes {
     pub msg: String,
+    pub room: String,
 }
 #[derive(Clone, Debug)]
 pub struct CreateRoomMsg {
     pub id: String,
     pub msg: String,
+    pub room: String,
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CloseRoomRes {
@@ -182,6 +184,17 @@ pub struct UserGift {
     pub E: u16,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct ReadyRes {
+    pub msg: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct ReadyData {
+    pub room: String,
+    pub msg: String,
+}
+
 pub enum UserEvent {
     Login(LoginMsg),
     Logout(LogoutMsg),
@@ -196,6 +209,7 @@ pub enum UserEvent {
     Start(StartRes),
     StartGet(StartGetMsg),
     GameSingal(GameSingalRes),
+    Ready(ReadyData),
 }
 
 fn get_user(id: &String, users: &BTreeMap<String, Rc<RefCell<User>>>) -> Option<Rc<RefCell<User>>> {
@@ -204,6 +218,16 @@ fn get_user(id: &String, users: &BTreeMap<String, Rc<RefCell<User>>>) -> Option<
         return Some(Rc::clone(u))
     }
     None
+}
+
+fn get_users_by_room(room: &String, users: &BTreeMap<String, Rc<RefCell<User>>>) -> Vec<Rc<RefCell<User>>> {
+    let mut user_list: Vec<Rc<RefCell<User>>> = Vec::new();
+    for (id, u) in users {
+        if u.borrow().room == room.to_string() {
+            user_list.push(u.clone());
+        }
+    }
+    user_list
 }
 
 pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
@@ -216,7 +240,7 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
     thread::spawn(move || {
         let mut rooms: IndexMap<String, Rc<RefCell<RoomRecord>>> = IndexMap::new();
         let mut TotalUsers: BTreeMap<String, Rc<RefCell<User>>> = BTreeMap::new();
-        for i in 0..10 {
+        for i in 1..1000 {
             TotalUsers.insert(i.to_string(),
                 Rc::new(RefCell::new(
                 User {
@@ -231,7 +255,7 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
         loop {
             select! {
                 recv(update500ms) -> _ => {
-                    println!("rx len: {}, tx len: {}", rx.len(), tx2.len());
+                    // println!("rx len: {}, tx len: {}", rx.len(), tx2.len());
                     for (i, u) in &mut TotalUsers {
                         //println!("User {} Action", i);
                         u.borrow_mut().next_action(&mut tx, &mut rooms);
@@ -420,6 +444,16 @@ pub fn init(msgtx: Sender<MqttMsg>) -> Sender<UserEvent> {
                                     println!("PreStart");
                                 }
                             },
+                            UserEvent::Ready(x) => {
+                                println!("{:?}", x);
+                                if x.msg == "ready" {
+                                    let user_list = get_users_by_room(&x.room, &TotalUsers);
+                                    for u in user_list {
+                                        u.borrow_mut().cnt = -1;
+                                        u.borrow_mut().get_ready();
+                                    }
+                                }
+                            },
                         }
                     }
                 }
@@ -449,7 +483,7 @@ pub fn create(id: String, v: Value, sender: Sender<UserEvent>)
  -> std::result::Result<(), Error>
 {
     let data: CreateRoomRes = serde_json::from_value(v)?;
-    sender.send(UserEvent::Create(CreateRoomMsg{id:id, msg:data.msg}));
+    sender.send(UserEvent::Create(CreateRoomMsg{id:id, msg:data.msg, room:data.room}));
     Ok(())
 }
 
@@ -522,6 +556,14 @@ pub fn game_singal(id: String, v: Value, sender: Sender<UserEvent>)
 {
     let data: GameSingalRes = serde_json::from_value(v)?;
     sender.send(UserEvent::GameSingal(data));
+    Ok(())
+}
+
+pub fn ready(room: String, v: Value, sender: Sender<UserEvent>)
+ -> std::result::Result<(), Error>
+{
+    let data: ReadyRes = serde_json::from_value(v)?;
+    sender.send(UserEvent::Ready(ReadyData{room: room, msg: data.msg}));
     Ok(())
 }
 

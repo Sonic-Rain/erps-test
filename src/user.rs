@@ -44,11 +44,7 @@ impl User {
         }
         if !self.isLogin {
             self.login(tx);
-        }
-        else if !self.isChooseNGHero {
-            self.choose_hero(tx, "freyja".to_owned());
-        }
-        else if !self.isInRoom {
+        } else if !self.isInRoom {
             r = rng.gen_range(0, 10);
             if r < 5 {
                 self.create(tx);
@@ -70,8 +66,7 @@ impl User {
             self.start_queue(tx);
         }
         else if self.isCanPreStart {
-            //self.prestart_get(tx);
-            self.prestart(tx);
+            self.ready(tx);
         }
         self.cnt = 0;
     }
@@ -86,7 +81,7 @@ impl User {
             self.start_queue(tx);
         }
         else if self.isCanPreStart {
-            self.prestart(tx);
+            self.ready(tx);
         }
     }
 
@@ -153,7 +148,7 @@ impl User {
     }
     pub fn create(&mut self, tx: &mut Sender<MqttMsg>) {
         if !self.isInRoom {
-            let msg = format!(r#"{{"id":"{}"}}"#, self.id);
+            let msg = format!(r#"{{"id":"{}","mode":"ng"}}"#, self.id);
             let topic = format!("room/{}/send/create", self.id);
             tx.try_send(MqttMsg{topic:topic, msg:msg});
             self.room = self.id.clone();
@@ -180,7 +175,7 @@ impl User {
             self.isStartQueue = true;
         }
         if !self.isStartQueue {
-            let msg = format!(r#"{{"id":"{}", "action":"start queue"}}"#, self.id);
+            let msg = format!(r#"{{"id":"{}", "action":"start queue", "room":"{}", "mode":"rk"}}"#, self.id, self.room);
             let topic = format!("room/{}/send/start_queue", self.room);
             tx.try_send(MqttMsg{topic:topic, msg:msg});
         }
@@ -193,14 +188,17 @@ impl User {
         self.isPreStart = true;
     }
 
-    pub fn prestart(&mut self, tx: &mut Sender<MqttMsg>) {
+    pub fn ready(&mut self, tx: &mut Sender<MqttMsg>) {
         if self.isCanPreStart && !self.isPreStart {
             //self.isPreStart = true;
             let mut rng = rand::thread_rng();
             let msg = format!(r#"{{"room":"{}", "id":"{}", "accept":true}}"#, self.room, self.id);
-            let topic = format!("room/{}/send/prestart", self.id);
+            let topic = format!("room/{}/send/ready", self.id);
             tx.try_send(MqttMsg{topic:topic, msg:msg}).unwrap();
         }
+    }
+    pub fn get_ready(&mut self) {
+        self.isCanPreStart = true;
     }
     pub fn get_prestart(&mut self, res: bool, tx: &mut Sender<MqttMsg>) {
         //

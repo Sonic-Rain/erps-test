@@ -71,7 +71,7 @@ fn main() -> std::result::Result<(), Error> {
                 .help("Client identifier"),
         ).get_matches();
 
-    let server_addr = matches.value_of("SERVER").unwrap_or("59.126.81.58").to_owned();
+    let server_addr = matches.value_of("SERVER").unwrap_or("172.105.232.176").to_owned();
     let server_port = matches.value_of("PORT").unwrap_or("1883").to_owned();
     let client_id = matches
         .value_of("CLIENT_ID")
@@ -99,6 +99,7 @@ fn main() -> std::result::Result<(), Error> {
     //mqtt_client.subscribe("room/+/res/prestart_get", QoS::AtLeastOnce).unwrap();
     mqtt_client.subscribe("room/+/res/start", QoS::AtMostOnce).unwrap();
     mqtt_client.subscribe("room/+/res/start_get", QoS::AtMostOnce).unwrap();
+    mqtt_client.subscribe("room/+/res/ready", QoS::AtMostOnce).unwrap();
 
     mqtt_client.subscribe("game/+/res/game_singal", QoS::AtMostOnce).unwrap();
     mqtt_client.subscribe("game/+/res/game_over", QoS::AtMostOnce).unwrap();
@@ -165,6 +166,7 @@ fn main() -> std::result::Result<(), Error> {
     let rechoosehero = Regex::new(r"\w+/(\w+)/res/choose_hero").unwrap();
     let restart_game = Regex::new(r"\w+/(\w+)/res/start_game").unwrap();
     let restart_get = Regex::new(r"\w+/(\w+)/res/start_get").unwrap();
+    let reready = Regex::new(r"\w+/(\w+)/res/ready").unwrap();
     let restart = Regex::new(r"\w+/(\w+)/res/start").unwrap();
     let regame_singal = Regex::new(r"\w+/(\w+)/res/game_singal").unwrap();
 
@@ -177,7 +179,7 @@ fn main() -> std::result::Result<(), Error> {
                 let handle = || -> Result<(), Error> {
                     if let Ok(x) = notification {
                         if let Publish(x) = x {
-                            //println!("{:?}", x);
+                            // println!("{:?}", x);
                             let payload = x.payload;
                             let msg = match str::from_utf8(&payload[..]) {
                                 Ok(msg) => msg,
@@ -191,74 +193,80 @@ fn main() -> std::result::Result<(), Error> {
                                 if relogin.is_match(topic_name) {
                                     let cap = relogin.captures(topic_name).unwrap();
                                     let userid = cap[1].to_string();
-                                    info!("login: userid: {} json: {:?}", userid, v);
+                                    // info!("login: userid: {} json: {:?}", userid, v);
                                     event::login(userid, v, sender.clone())?;
                                 }
                                 else if relogout.is_match(topic_name) {
                                     let cap = relogout.captures(topic_name).unwrap();
                                     let userid = cap[1].to_string();
-                                    //info!("logout: userid: {} json: {:?}", userid, v);
+                                    // info!("logout: userid: {} json: {:?}", userid, v);
                                     event::logout(userid, v, sender.clone())?;
                                 }
                                 else if recreate.is_match(topic_name) {
                                     let cap = recreate.captures(topic_name).unwrap();
                                     let userid = cap[1].to_string();
-                                    //info!("create: userid: {} json: {:?}", userid, v);
+                                    // info!("create: userid: {} json: {:?}", userid, v);
                                     event::create(userid, v, sender.clone())?;
                                 }
                                 else if reclose.is_match(topic_name) {
                                     let cap = reclose.captures(topic_name).unwrap();
                                     let userid = cap[1].to_string();
-                                    //info!("close: userid: {} json: {:?}", userid, v);
+                                    // info!("close: userid: {} json: {:?}", userid, v);
                                     event::close(userid, v, sender.clone())?;
                                 }
                                 else if rejoin.is_match(topic_name) {
                                     let cap = rejoin.captures(topic_name).unwrap();
                                     let userid = cap[1].to_string();
-                                    //info!("join: userid: {} json: {:?}", userid, v);
+                                    // info!("join: userid: {} json: {:?}", userid, v);
                                     event::join(userid, v, sender.clone())?;
                                 }
                                 else if restart_queue.is_match(topic_name) {
                                     let cap = restart_queue.captures(topic_name).unwrap();
                                     let userid = cap[1].to_string();
-                                    //info!("start_queue: userid: {} json: {:?}", userid, v);
+                                    // info!("start_queue: userid: {} json: {:?}", userid, v);
                                     event::start_queue(userid, v, sender.clone())?;
                                 }
                                 else if rechoosehero.is_match(topic_name) {
                                     let cap = rechoosehero.captures(topic_name).unwrap();
                                     let userid = cap[1].to_string();
-                                    //info!("choose hero: userid: {} json: {:?}", userid, v);
+                                    // info!("choose hero: userid: {} json: {:?}", userid, v);
                                     event::choose_hero(userid, v, sender.clone())?;
                                 }
                                 else if represtart.is_match(topic_name) {
                                     let cap = represtart.captures(topic_name).unwrap();
                                     let userid = cap[1].to_string();
-                                    //info!("prestart hero: userid: {} json: {:?}", userid, v);
+                                    // info!("prestart hero: userid: {} json: {:?}", userid, v);
                                     event::prestart(userid, v, sender.clone())?;
                                 }
                                 else if restart_get.is_match(topic_name) {
                                     let cap = restart_get.captures(topic_name).unwrap();
                                     let userid = cap[1].to_string();
-                                    //info!("prestart hero: userid: {} json: {:?}", userid, v);
+                                    info!("start get: userid: {} json: {:?}", userid, v);
                                     event::start_get(userid, v, sender.clone())?;
                                 }
                                 else if restart_game.is_match(topic_name) {
                                     let cap = restart_game.captures(topic_name).unwrap();
                                     let userid = cap[1].to_string();
-                                    //info!("start_game hero: userid: {} json: {:?}", userid, v);
+                                    // info!("start_game hero: userid: {} json: {:?}", userid, v);
                                     event::start_game(userid, v, sender.clone())?;
                                 }
                                 else if restart.is_match(topic_name) {
                                     let cap = restart.captures(topic_name).unwrap();
                                     let userid = cap[1].to_string();
-                                    //info!("start hero: userid: {} json: {:?}", userid, v);
+                                    // info!("start hero: userid: {} json: {:?}", userid, v);
                                     event::start(userid, v, sender.clone())?;
                                 }
                                 else if regame_singal.is_match(topic_name) {
                                     let cap = regame_singal.captures(topic_name).unwrap();
                                     let userid = cap[1].to_string();
-                                    //info!("game_singal: userid: {} json: {:?}", userid, v);
+                                    // info!("game_singal: userid: {} json: {:?}", userid, v);
                                     event::game_singal(userid, v, sender.clone())?;
+                                }                                
+                                else if reready.is_match(topic_name) {
+                                    let cap = reready.captures(topic_name).unwrap();
+                                    let userid = cap[1].to_string();
+                                    // info!("reready: userid: {} json: {:?}", userid, v);
+                                    event::ready(userid, v, sender.clone())?;
                                 }
                                 else if redead.is_match(topic_name) {
                                     thread::sleep(Duration::from_millis(5000));
